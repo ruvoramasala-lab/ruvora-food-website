@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RUVORA | Pure. Natural. Trust.</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{--green:#146c43;--dark:#123326;--light:#f5f8f4;--gold:#d8a83e}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--light);color:#183328}header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #e5e9e4}.top{max-width:1100px;margin:auto;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{font-size:23px;font-weight:800;color:var(--green)}.tag{font-size:11px;color:#66786d}.btn{border:0;border-radius:9px;background:var(--green);color:white;padding:11px 14px;font-weight:700;cursor:pointer}.btn.alt{background:#e9f0ea;color:var(--green)}.wrap{max-width:1100px;margin:auto;padding:18px}.hero{background:linear-gradient(120deg,#123326,#24734d);color:white;border-radius:18px;padding:32px 25px;display:flex;justify-content:space-between;gap:20px;align-items:center}.hero h1{font-size:clamp(28px,5vw,48px);margin:0 0 8px}.hero p{margin:0 0 18px;color:#e6f3e9}.hero .badge{background:#ffffff1f;padding:10px 14px;border-radius:50%;font-size:60px}.section-title{display:flex;justify-content:space-between;align-items:center;margin:28px 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:15px}.card{background:#fff;border:1px solid #e5ebe5;border-radius:14px;padding:14px;box-shadow:0 3px 12px #1233260a}.product-img{height:150px;background:#edf4ed;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:52px;margin-bottom:12px}.price{font-weight:800;color:var(--green);font-size:19px}.muted{color:#718076;font-size:13px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.field{width:100%;padding:12px;border:1px solid #d7e1d8;border-radius:8px;margin:5px 0 10px}.modal{display:none;position:fixed;inset:0;background:#0008;z-index:10;padding:18px;overflow:auto}.modalbox{max-width:550px;background:white;border-radius:16px;padding:20px;margin:40px auto}.cart-line{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #e5ebe5;padding:10px 0}nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #ddd;display:flex;justify-content:center;gap:25px;padding:10px;z-index:6}nav button{border:0;background:transparent;color:var(--green);font-weight:700}main{padding-bottom:70px}footer{background:var(--dark);color:#d9e8dd;padding:28px 18px;margin-top:35px}footer .wrap{padding:0}small{font-size:11px}
+</style></head>
+<body>
+<header><div class="top"><div><div class="brand" id="brand">RUVORA</div><div class="tag" id="slogan">Pure. Natural. Trust.</div></div><div class="row"><button class="btn alt" onclick="openCart()">Cart (<span id="cartCount">0</span>)</button><button class="btn" onclick="openAccount()">Account</button></div></div></header>
+<main><div class="wrap"><section class="hero"><div><h1 id="heroTitle">Pure Food. Honest Trust.</h1><p id="heroText">Quality spices and natural foods for your family.</p><button class="btn" onclick="document.getElementById('products').scrollIntoView({behavior:'smooth'})">Shop Now</button></div><div class="badge">🌿</div></section>
+<div class="section-title"><h2>Our Products</h2><button class="btn alt" onclick="loadProducts()">Refresh</button></div><div id="products" class="grid"><div class="card">Loading products...</div></div>
+<div class="section-title"><h2>Contact & Message</h2></div><div class="card"><p id="contactInfo">For order support, contact us.</p><button class="btn" onclick="openMessage()">Send Message</button></div></div></main>
+<footer><div class="wrap"><b id="footerName">RUVORA FOOD</b><p id="footerText">Pure. Natural. Trust.</p><small id="footerContact">ঘুনি বসুন্দিয়া সদর যশোর</small></div></footer>
+<nav><button onclick="scrollTo(0,0)">Home</button><button onclick="document.getElementById('products').scrollIntoView({behavior:'smooth'})">Categories</button><button onclick="openSearch()">Search</button><button onclick="openCart()">Cart</button><button onclick="openAccount()">Account</button></nav>
+
+<div class="modal" id="cartModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Your Cart</h2><button class="btn alt" onclick="closeModals()">Close</button></div><div id="cartItems"></div><h3 id="cartTotal">Total: ৳0</h3><button class="btn" onclick="openCheckout()">Checkout</button></div></div>
+<div class="modal" id="checkoutModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Checkout</h2><button class="btn alt" onclick="closeModals()">Close</button></div><form onsubmit="placeOrder(event)"><label>Full Name</label><input class="field" id="cName" required><label>Phone</label><input class="field" id="cPhone" required><label>Delivery Address</label><textarea class="field" id="cAddress" required></textarea><label>Payment Method</label><select class="field" id="cPayment"><option>Cash on Delivery</option><option>bKash</option><option>Nagad</option><option>Bank Account</option></select><button class="btn" type="submit">Place Order</button></form></div></div>
+<div class="modal" id="accountModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Account</h2><button class="btn alt" onclick="closeModals()">Close</button></div><div id="accountBody"><form onsubmit="login(event)"><input class="field" id="aEmail" type="email" placeholder="Email" required><input class="field" id="aPassword" type="password" placeholder="Password" required><button class="btn">Login</button></form><p class="muted">New customer? Use the same form after creating an account below.</p><button class="btn alt" onclick="signup()">Create Account</button></div></div></div>
+<div class="modal" id="messageModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Send Message</h2><button class="btn alt" onclick="closeModals()">Close</button></div><form onsubmit="sendMessage(event)"><input class="field" id="mName" placeholder="Name" required><input class="field" id="mPhone" placeholder="Phone" required><textarea class="field" id="mText" placeholder="Your message" required></textarea><button class="btn">Send</button></form></div></div>
+<script>
+const firebaseConfig={apiKey:"AIzaSyAA3Q7WYPRHEZQaxHJ1rcz_OUOtUcRQ68k",authDomain:"ruvora-food.firebaseapp.com",projectId:"ruvora-food",storageBucket:"ruvora-food.firebasestorage.app",messagingSenderId:"111801740589",appId:"1:111801740589:web:c6b888e615ad141e2977a4",measurementId:"G-6QRCCDNCEM"};
+let db,auth,settings={},products=[],cart=JSON.parse(localStorage.getItem('ruvoraCart')||'[]');
+try{firebase.initializeApp(firebaseConfig);db=firebase.firestore();auth=firebase.auth()}catch(e){console.error(e)}
+const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+function closeModals(){document.querySelectorAll('.modal').forEach(x=>x.style.display='none')}function show(id){closeModals();$(id).style.display='block'}
+let stopSettingsListener=null,stopProductsListener=null;
+function applySettings(data){
+  settings=data||{};
+  $('brand').textContent=settings.companyName||'RUVORA';
+  $('slogan').textContent=settings.slogan||'Pure. Natural. Trust.';
+  $('heroTitle').textContent=settings.homeHeading||settings.bannerTitle||settings.heroTitle||'Pure Food. Honest Trust.';
+  $('heroText').textContent=settings.homeSubtitle||settings.bannerText||settings.heroText||'Quality spices and natural foods for your family.';
+  $('footerName').textContent=settings.companyName||'RUVORA FOOD';
+  $('footerText').textContent=settings.footer||settings.slogan||'Pure. Natural. Trust.';
+  $('footerContact').textContent=(settings.address||'ঘুনি বসুন্দিয়া সদর যশোর')+' | '+(settings.phone1||'01607078924');
+  $('contactInfo').textContent='Phone: '+(settings.phone1||'01607078924')+' | '+(settings.phone2||'01335-699613');
+  if(settings.logo)$('brand').style.backgroundImage=`url("${esc(settings.logo)}")`;
+}
+function loadSettings(){
+  if(!db)return;
+  if(stopSettingsListener)stopSettingsListener();
+  stopSettingsListener=db.collection('siteSettings').doc('main').onSnapshot(s=>{
+    if(s.exists){applySettings(s.data());return;}
+    db.collection('settings').doc('main').get().then(f=>{if(f.exists)applySettings(f.data());});
+  },e=>console.warn(e));
+}
+function renderProducts(){
+  let box=$('products');
+  box.innerHTML=products.length?products.map(p=>`<div class="card"><div class="product-img">${p.image?`<img src="${esc(p.image)}" style="max-width:100%;max-height:100%;border-radius:10px">`:esc(p.emoji||'🌾')}</div><h3>${esc(p.name||'Product')}</h3><p class="muted">${esc(p.description||'Pure and carefully prepared.')}</p><div class="price">৳${Number(p.price||0)}</div><p class="muted">${esc(p.weight||'')}</p>${Number(p.stock||0)<=0?'<p class="muted">Out of stock</p>':''}<button class="btn" ${Number(p.stock||0)<=0?'disabled':''} onclick="addToCart('${p.id}')">Add to Cart</button></div>`).join(''):'<div class="card">No products available yet.</div>';
+}
+function loadProducts(){
+  if(!db)return;
+  let box=$('products');
+  if(stopProductsListener)stopProductsListener();
+  stopProductsListener=db.collection('products').onSnapshot(snap=>{
+    products=snap.docs.map(d=>({id:d.id,...d.data()})).filter(p=>p.active!==false);
+    renderProducts();
+  },e=>{
+    box.innerHTML='<div class="card">Products could not be loaded. Please try again.</div>';
+    console.error(e);
+  });
+}
+function addToCart(id){let p=products.find(x=>x.id===id);if(!p)return;let x=cart.find(x=>x.id===id);if(x)x.qty++;else cart.push({id,name:p.name||'Product',weight:p.weight||'',price:Number(p.price||0),qty:1});saveCart();alert('Added to cart')}
+function saveCart(){localStorage.setItem('ruvoraCart',JSON.stringify(cart));$('cartCount').textContent=cart.reduce((a,x)=>a+x.qty,0)}
+function openCart(){show('cartModal');let total=0;$('cartItems').innerHTML=cart.length?cart.map((x,i)=>{total+=x.price*x.qty;return `<div class="cart-line"><span>${esc(x.name)} × ${x.qty}</span><b>৳${x.price*x.qty}</b><button class="btn alt" onclick="removeItem(${i})">×</button></div>`}).join(''):'Your cart is empty.';$('cartTotal').textContent='Total: ৳'+total}
+function removeItem(i){cart.splice(i,1);saveCart();openCart()}function openCheckout(){if(!cart.length)return alert('Your cart is empty');show('checkoutModal')}
+async function placeOrder(e){e.preventDefault();let data={customerName:$('cName').value,phone:$('cPhone').value,address:$('cAddress').value,email:auth&&auth.currentUser?auth.currentUser.email:'',paymentMethod:$('cPayment').value,items:cart,total:cart.reduce((a,x)=>a+x.price*x.qty,0),status:'pending',createdAt:firebase.firestore.FieldValue.serverTimestamp()};try{await db.collection('orders').add(data);cart=[];saveCart();closeModals();alert('Order placed successfully. Our team will contact you soon.')}catch(err){alert('Order could not be placed: '+err.message)}}
+function openAccount(){show('accountModal')}async function login(e){e.preventDefault();try{await auth.signInWithEmailAndPassword($('aEmail').value,$('aPassword').value);alert('Login successful');closeModals()}catch(e){alert(e.message)}}async function signup(){try{await auth.createUserWithEmailAndPassword($('aEmail').value,$('aPassword').value);alert('Account created')}catch(e){alert(e.message)}}
+function openMessage(){show('messageModal')}async function sendMessage(e){e.preventDefault();try{await db.collection('messages').add({name:$('mName').value,phone:$('mPhone').value,message:$('mText').value,status:'unread',createdAt:firebase.firestore.FieldValue.serverTimestamp()});alert('Message sent');closeModals()}catch(err){alert(err.message)}}function openSearch(){let q=prompt('Search product');if(!q)return;let found=products.filter(p=>(p.name||p.productName||'').toLowerCase().includes(q.toLowerCase()));alert(found.length?found.map(p=>p.name||p.productName).join('\n'):'No matching product found')}
+auth&&auth.onAuthStateChanged(user=>{if(user){$('aEmail').value=user.email||''}});
+(function(){saveCart();loadSettings();loadProducts()})();
+</script></body></html>
