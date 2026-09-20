@@ -19,58 +19,31 @@
 
 <div class="modal" id="cartModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Your Cart</h2><button class="btn alt" onclick="closeModals()">Close</button></div><div id="cartItems"></div><h3 id="cartTotal">Total: ৳0</h3><button class="btn" onclick="openCheckout()">Checkout</button></div></div>
 <div class="modal" id="checkoutModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Checkout</h2><button class="btn alt" onclick="closeModals()">Close</button></div><form onsubmit="placeOrder(event)"><label>Full Name</label><input class="field" id="cName" required><label>Phone</label><input class="field" id="cPhone" required><label>Delivery Address</label><textarea class="field" id="cAddress" required></textarea><label>Payment Method</label><select class="field" id="cPayment"><option>Cash on Delivery</option><option>bKash</option><option>Nagad</option><option>Bank Account</option></select><button class="btn" type="submit">Place Order</button></form></div></div>
-<div class="modal" id="accountModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Account</h2><button class="btn alt" onclick="closeModals()">Close</button></div><div id="accountBody"><form onsubmit="login(event)"><input class="field" id="aEmail" type="email" placeholder="Email" required><input class="field" id="aPassword" type="password" placeholder="Password" required><button class="btn">Login</button></form><p class="muted">New customer? Use the same form after creating an account below.</p><button class="btn alt" onclick="signup()">Create Account</button></div></div></div>
+<div class="modal" id="accountModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Account</h2><button class="btn alt" onclick="closeModals()">Close</button></div><div id="accountBody"></div></div></div>
 <div class="modal" id="messageModal"><div class="modalbox"><div class="row" style="justify-content:space-between"><h2>Send Message</h2><button class="btn alt" onclick="closeModals()">Close</button></div><form onsubmit="sendMessage(event)"><input class="field" id="mName" placeholder="Name" required><input class="field" id="mPhone" placeholder="Phone" required><textarea class="field" id="mText" placeholder="Your message" required></textarea><button class="btn">Send</button></form></div></div>
 <script>
 const firebaseConfig={apiKey:"AIzaSyAA3Q7WYPRHEZQaxHJ1rcz_OUOtUcRQ68k",authDomain:"ruvora-food.firebaseapp.com",projectId:"ruvora-food",storageBucket:"ruvora-food.firebasestorage.app",messagingSenderId:"111801740589",appId:"1:111801740589:web:c6b888e615ad141e2977a4",measurementId:"G-6QRCCDNCEM"};
-let db,auth,settings={},products=[],cart=JSON.parse(localStorage.getItem('ruvoraCart')||'[]');
+let db=null,auth=null,settings={},products=[],cart=JSON.parse(localStorage.getItem('ruvoraCart')||'[]'),settingsUnsub=null,productsUnsub=null,currentUser=null;
 try{firebase.initializeApp(firebaseConfig);db=firebase.firestore();auth=firebase.auth()}catch(e){console.error(e)}
 const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 function closeModals(){document.querySelectorAll('.modal').forEach(x=>x.style.display='none')}function show(id){closeModals();$(id).style.display='block'}
-let stopSettingsListener=null,stopProductsListener=null;
-function applySettings(data){
-  settings=data||{};
-  $('brand').textContent=settings.companyName||'RUVORA';
-  $('slogan').textContent=settings.slogan||'Pure. Natural. Trust.';
-  $('heroTitle').textContent=settings.homeHeading||settings.bannerTitle||settings.heroTitle||'Pure Food. Honest Trust.';
-  $('heroText').textContent=settings.homeSubtitle||settings.bannerText||settings.heroText||'Quality spices and natural foods for your family.';
-  $('footerName').textContent=settings.companyName||'RUVORA FOOD';
-  $('footerText').textContent=settings.footer||settings.slogan||'Pure. Natural. Trust.';
-  $('footerContact').textContent=(settings.address||'ঘুনি বসুন্দিয়া সদর যশোর')+' | '+(settings.phone1||'01607078924');
-  $('contactInfo').textContent='Phone: '+(settings.phone1||'01607078924')+' | '+(settings.phone2||'01335-699613');
-  if(settings.logo)$('brand').style.backgroundImage=`url("${esc(settings.logo)}")`;
-}
-function loadSettings(){
-  if(!db)return;
-  if(stopSettingsListener)stopSettingsListener();
-  stopSettingsListener=db.collection('siteSettings').doc('main').onSnapshot(s=>{
-    if(s.exists){applySettings(s.data());return;}
-    db.collection('settings').doc('main').get().then(f=>{if(f.exists)applySettings(f.data());});
-  },e=>console.warn(e));
-}
-function renderProducts(){
-  let box=$('products');
-  box.innerHTML=products.length?products.map(p=>`<div class="card"><div class="product-img">${p.image?`<img src="${esc(p.image)}" style="max-width:100%;max-height:100%;border-radius:10px">`:esc(p.emoji||'🌾')}</div><h3>${esc(p.name||'Product')}</h3><p class="muted">${esc(p.description||'Pure and carefully prepared.')}</p><div class="price">৳${Number(p.price||0)}</div><p class="muted">${esc(p.weight||'')}</p>${Number(p.stock||0)<=0?'<p class="muted">Out of stock</p>':''}<button class="btn" ${Number(p.stock||0)<=0?'disabled':''} onclick="addToCart('${p.id}')">Add to Cart</button></div>`).join(''):'<div class="card">No products available yet.</div>';
-}
-function loadProducts(){
-  if(!db)return;
-  let box=$('products');
-  if(stopProductsListener)stopProductsListener();
-  stopProductsListener=db.collection('products').onSnapshot(snap=>{
-    products=snap.docs.map(d=>({id:d.id,...d.data()})).filter(p=>p.active!==false);
-    renderProducts();
-  },e=>{
-    box.innerHTML='<div class="card">Products could not be loaded. Please try again.</div>';
-    console.error(e);
-  });
-}
-function addToCart(id){let p=products.find(x=>x.id===id);if(!p)return;let x=cart.find(x=>x.id===id);if(x)x.qty++;else cart.push({id,name:p.name||'Product',weight:p.weight||'',price:Number(p.price||0),qty:1});saveCart();alert('Added to cart')}
+function renderAccount(){const box=$('accountBody');if(!box)return;if(currentUser){box.innerHTML=`<div class="card" style="margin:0"><h3>My Account</h3><p><b>Email:</b> ${esc(currentUser.email||'')}</p><p class="muted">Your customer account is active on this website.</p><div class="row"><button class="btn" onclick="closeModals()">Continue Shopping</button><button class="btn alt" onclick="logoutCustomer()">Logout</button></div></div>`}else{box.innerHTML=`<form onsubmit="login(event)"><input class="field" id="aEmail" type="email" placeholder="Email" required><input class="field" id="aPassword" type="password" placeholder="Password" required><button class="btn" type="submit">Login</button></form><p class="muted">New customer?</p><button class="btn alt" onclick="signup()">Create Account</button>`}}
+function openAccount(){renderAccount();show('accountModal')}
+async function loadSettings(){if(!db)return;try{if(settingsUnsub)settingsUnsub();settingsUnsub=db.collection('siteSettings').doc('main').onSnapshot(s=>{if(!s.exists)return;settings=s.data();$('brand').textContent=settings.companyName||settings.brandName||'RUVORA';$('slogan').textContent=settings.slogan||'Pure. Natural. Trust.';$('heroTitle').textContent=settings.homeHeading||settings.bannerTitle||settings.heroTitle||'Pure Food. Honest Trust.';$('heroText').textContent=settings.homeSubtitle||settings.bannerText||settings.heroText||'Quality spices and natural foods for your family.';$('footerName').textContent=settings.companyName||'RUVORA FOOD';$('footerText').textContent=settings.footer||settings.slogan||'Pure. Natural. Trust.';$('footerContact').textContent=(settings.address||'ঘুনি বসুন্দিয়া সদর যশোর')+' | '+(settings.phone1||'01607078924');$('contactInfo').textContent='Phone: '+(settings.phone1||'01607078924')+' | '+(settings.phone2||'01335-699613')})}catch(e){console.warn(e)}}
+function renderProducts(){let box=$('products');if(!products.length){box.innerHTML='<div class="card">No products available yet.</div>';return}box.innerHTML=products.map(p=>`<div class="card"><div class="product-img">${(p.image||p.imageUrl)?`<img src="${esc(p.image||p.imageUrl)}" style="max-width:100%;max-height:100%;border-radius:10px">`:'🌾'}</div><h3>${esc(p.name||p.productName||'Product')}</h3><p class="muted">${esc(p.description||'Pure and carefully prepared.')}</p><div class="price">৳${Number(p.price||p.retailPrice||0)}</div><p class="muted">${esc(p.weight||p.packageSize||p.size||'')}</p><button class="btn" onclick="addToCart('${p.id}')">Add to Cart</button></div>`).join('')}
+async function loadProducts(){if(!db)return;try{if(productsUnsub)productsUnsub();productsUnsub=db.collection('products').onSnapshot(snap=>{products=snap.docs.map(d=>({id:d.id,...d.data()})).filter(p=>p.active!==false);renderProducts()})}catch(e){$('products').innerHTML='<div class="card">Products could not be loaded. Please try again.</div>';console.error(e)}}
+function addToCart(id){let p=products.find(x=>x.id===id);if(!p)return;let x=cart.find(x=>x.id===id);if(x)x.qty++;else cart.push({id,name:p.name||p.productName,price:Number(p.price||p.retailPrice||0),weight:p.weight||p.packageSize||p.size||'',qty:1});saveCart();alert('Added to cart')}
 function saveCart(){localStorage.setItem('ruvoraCart',JSON.stringify(cart));$('cartCount').textContent=cart.reduce((a,x)=>a+x.qty,0)}
 function openCart(){show('cartModal');let total=0;$('cartItems').innerHTML=cart.length?cart.map((x,i)=>{total+=x.price*x.qty;return `<div class="cart-line"><span>${esc(x.name)} × ${x.qty}</span><b>৳${x.price*x.qty}</b><button class="btn alt" onclick="removeItem(${i})">×</button></div>`}).join(''):'Your cart is empty.';$('cartTotal').textContent='Total: ৳'+total}
 function removeItem(i){cart.splice(i,1);saveCart();openCart()}function openCheckout(){if(!cart.length)return alert('Your cart is empty');show('checkoutModal')}
-async function placeOrder(e){e.preventDefault();let data={customerName:$('cName').value,phone:$('cPhone').value,address:$('cAddress').value,email:auth&&auth.currentUser?auth.currentUser.email:'',paymentMethod:$('cPayment').value,items:cart,total:cart.reduce((a,x)=>a+x.price*x.qty,0),status:'pending',createdAt:firebase.firestore.FieldValue.serverTimestamp()};try{await db.collection('orders').add(data);cart=[];saveCart();closeModals();alert('Order placed successfully. Our team will contact you soon.')}catch(err){alert('Order could not be placed: '+err.message)}}
-function openAccount(){show('accountModal')}async function login(e){e.preventDefault();try{await auth.signInWithEmailAndPassword($('aEmail').value,$('aPassword').value);alert('Login successful');closeModals()}catch(e){alert(e.message)}}async function signup(){try{await auth.createUserWithEmailAndPassword($('aEmail').value,$('aPassword').value);alert('Account created')}catch(e){alert(e.message)}}
-function openMessage(){show('messageModal')}async function sendMessage(e){e.preventDefault();try{await db.collection('messages').add({name:$('mName').value,phone:$('mPhone').value,message:$('mText').value,status:'unread',createdAt:firebase.firestore.FieldValue.serverTimestamp()});alert('Message sent');closeModals()}catch(err){alert(err.message)}}function openSearch(){let q=prompt('Search product');if(!q)return;let found=products.filter(p=>(p.name||p.productName||'').toLowerCase().includes(q.toLowerCase()));alert(found.length?found.map(p=>p.name||p.productName).join('\n'):'No matching product found')}
-auth&&auth.onAuthStateChanged(user=>{if(user){$('aEmail').value=user.email||''}});
-(function(){saveCart();loadSettings();loadProducts()})();
+async function placeOrder(e){e.preventDefault();let u=auth&&auth.currentUser;let data={customerName:$('cName').value,phone:$('cPhone').value,address:$('cAddress').value,paymentMethod:$('cPayment').value,email:u?.email||'',uid:u?.uid||'',items:cart,total:cart.reduce((a,x)=>a+x.price*x.qty,0),status:'pending',createdAt:firebase.firestore.FieldValue.serverTimestamp()};try{await db.collection('orders').add(data);cart=[];saveCart();closeModals();alert('Order placed successfully. Our team will contact you soon.')}catch(err){alert('Order could not be placed: '+err.message)}}
+async function login(e){e.preventDefault();try{await auth.signInWithEmailAndPassword($('aEmail').value.trim(),$('aPassword').value);alert('Login successful');renderAccount();closeModals()}catch(e){alert(e.code==='auth/invalid-credential'||e.code==='auth/wrong-password'?'Email or password is incorrect.':e.message)}}
+async function signup(){const email=$('aEmail')?.value.trim(),password=$('aPassword')?.value;if(!email||!password)return alert('Create Account করতে Email এবং Password দিন।');if(password.length<6)return alert('Password কমপক্ষে 6 অক্ষরের হতে হবে।');try{await auth.createUserWithEmailAndPassword(email,password);alert('Account created successfully');renderAccount()}catch(e){alert(e.code==='auth/email-already-in-use'?'এই Email দিয়ে আগে থেকেই Account আছে। Login করুন।':e.message)}}
+async function logoutCustomer(){try{await auth.signOut();renderAccount();show('accountModal')}catch(e){alert(e.message)}}
+function openMessage(){show('messageModal')}
+async function sendMessage(e){e.preventDefault();try{let u=auth?.currentUser;await db.collection('messages').add({name:$('mName').value,phone:$('mPhone').value,email:u?.email||'',uid:u?.uid||'',message:$('mText').value,status:'unread',createdAt:firebase.firestore.FieldValue.serverTimestamp()});alert('Message sent');closeModals()}catch(err){alert(err.message)}}
+function openSearch(){let q=prompt('Search product');if(!q)return;let found=products.filter(p=>(p.name||p.productName||'').toLowerCase().includes(q.toLowerCase()));alert(found.length?found.map(p=>p.name||p.productName).join('\n'):'No matching product found')}
+if(auth){auth.onAuthStateChanged(user=>{currentUser=user;renderAccount()})}
+(async()=>{saveCart();renderAccount();await loadSettings();await loadProducts()})();
+</script>
 </script></body></html>
