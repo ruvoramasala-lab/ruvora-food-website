@@ -85,15 +85,24 @@ async function uploadImage(file,folder){
  return await ref.getDownloadURL();
 }
 
-async function addProduct(){
+async 
+function setStockStatusField(status, qty){
+  const s=$('productStockStatus'); const q=$('productStock');
+  if(s)s.value=(status==='out')?'out':((Number(qty||0)>0)?'available':'out');
+  if(q && status==='out')q.value=0;
+}
+
+function addProduct(){
  const btn=$('addProductBtn');try{btn.disabled=true;btn.innerText='Saving...';
  const name=$('productName').value.trim(),weight=$('productWeight').value.trim(),price=Number($('productPrice').value);
  if(!name||!weight||!price)throw Error('Product name, size and price are required.');
- let image='';const file=$('productImage').files[0];
- if(file){msg('productMessage','Uploading product photo...','warning');image=await uploadImage(file,'products');}
- const data={name,category:$('productCategory').value.trim(),weight,price,wholesalePrice:Number($('productWholesale').value||0),stock:Number($('productStock').value||0),batchNumber:$('productBatch').value.trim(),expiryDate:$('productExpiry').value,ingredients:$('productIngredients').value.trim(),description:$('productDescription').value.trim(),emoji:$('productEmoji').value.trim()||'📦',image,active:true,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+ let image='',uploadPending=false;const file=$('productImage').files[0];
+ if(file){msg('productMessage','Uploading product photo...','warning');try{image=await uploadImage(file,'products')}catch(uploadErr){uploadPending=true;console.warn(uploadErr);msg('productMessage','Product data will be saved; photo upload is pending until Firebase Storage is available.','warning')}}
+ const stockStatus=($('productStockStatus')?.value||'').trim();
+  const stock=Number($('productStock').value||0);
+  const data={name,category:$('productCategory').value.trim(),weight,price,wholesalePrice:Number($('productWholesale').value||0),stock,stockStatus,batchNumber:$('productBatch').value.trim(),expiryDate:$('productExpiry').value,ingredients:$('productIngredients').value.trim(),description:$('productDescription').value.trim(),emoji:$('productEmoji').value.trim()||'📦',image,imageUploadPending:uploadPending,active:true,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
  await db.collection('products').add(data);
- msg('productMessage',image?'Product and photo saved successfully.':'Product added successfully.','success');
+ msg('productMessage',uploadPending?'Product saved. Photo pending until Firebase Storage is available.':(image?'Product and photo saved successfully.':'Product added successfully.'),uploadPending?'warning':'success');
  document.querySelectorAll('#panel-products input,#panel-products textarea').forEach(x=>{if(x.type!=='file')x.value=''});$('productImage').value='';loadProducts();
  }catch(e){console.error(e);msg('productMessage','Product save failed: '+(e.code?e.code+' — ':'')+e.message,'error')}finally{btn.disabled=false;btn.innerText='Add Product'}}
 function loadProducts(){const list=$('productList');list.innerHTML='Loading...';if(productsUnsubscribe)productsUnsubscribe();productsUnsubscribe=db.collection('products').onSnapshot(s=>{totalProducts.innerText=s.size;if(s.empty){list.innerHTML='<p class="muted">No products.</p>';return}let h='';s.forEach(d=>{const x=d.data();h+='<div class="item"><div class="row">'+(x.image?'<img class="thumb" src="'+escapeHtml(x.image)+'">':'<div class="thumb" style="display:flex;align-items:center;justify-content:center;font-size:35px">'+escapeHtml(x.emoji||'📦')+'</div>')+'<div style="flex:1"><strong>'+escapeHtml(x.name)+'</strong><div class="muted">'+escapeHtml(x.category||'')+' | '+escapeHtml(x.weight||'')+'</div><div>Retail: ৳ '+Number(x.price||0)+' | Stock: '+Number(x.stock||0)+'</div></div><div class="actions"><button onclick="editProduct(\''+d.id+'\')">Edit</button><button class="danger" onclick="deleteProduct(\''+d.id+'\')">Delete</button></div></div></div>'});list.innerHTML=h},e=>{list.innerHTML='<div class="message error">'+escapeHtml(e.message)+'</div>'})}
@@ -113,8 +122,8 @@ async function loadSettings(){try{const a=await db.collection('siteSettings').do
 function settingsData(){return{companyName:$('sCompanyName').value,slogan:$('sSlogan').value,address:$('sAddress').value,phone1:$('sPhone1').value,phone2:$('sPhone2').value,whatsapp:$('sWhatsapp').value,email:$('sEmail').value,facebook:$('sFacebook').value,youtube:$('sYoutube').value,seoTitle:$('sSeoTitle').value,seoDescription:$('sSeoDescription').value}}
 async function saveSettings(){const btn=$('saveSettingsBtn');try{btn.disabled=true;btn.innerText='Saving...';
  let logo=currentSettings.logo||'',banner=currentSettings.banner||'';
- if($('sLogo').files[0]){msg('settingsMessage','Uploading logo...','warning');logo=await uploadImage($('sLogo').files[0],'site/logo');}
- if($('sBanner').files[0]){msg('settingsMessage','Uploading banner...','warning');banner=await uploadImage($('sBanner').files[0],'site/banner');}
+ if($('sLogo').files[0]){try{msg('settingsMessage','Uploading logo...','warning');logo=await uploadImage($('sLogo').files[0],'site/logo')}catch(e){console.warn(e);msg('settingsMessage','Logo upload pending; other settings will still be saved.','warning')}}
+ if($('sBanner').files[0]){try{msg('settingsMessage','Uploading banner...','warning');banner=await uploadImage($('sBanner').files[0],'site/banner')}catch(e){console.warn(e);msg('settingsMessage','Banner upload pending; other settings will still be saved.','warning')}}
  const payload={...settingsData(),logo,banner,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
  await db.collection('siteSettings').doc('main').set(payload,{merge:true});currentSettings={...currentSettings,...payload};
  $('sLogo').value='';$('sBanner').value='';if(logo){$('logoPreview').src=logo;$('logoPreview').classList.remove('hidden')}if(banner){$('bannerPreview').src=banner;$('bannerPreview').classList.remove('hidden')}
