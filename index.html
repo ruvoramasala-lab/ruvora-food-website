@@ -51,6 +51,10 @@ async function placeOrder(e){
  const sub=cartSubtotal(),del=deliveryCharge(sub),total=sub+del;
  const u=auth.currentUser;
  const name=$('cName').value.trim(), phone=$('cPhone').value.trim(), address=$('cAddress').value.trim();
+ const paymentMethod=$('cPayment').value;
+ const paymentReference=$('cReference').value.trim();
+ if(!paymentMethod){ if(btn) btn.disabled=false; return alert('Please select a payment method.'); }
+ if(paymentMethod!=='Cash on Delivery' && !paymentReference){ if(btn) btn.disabled=false; return alert('Please enter the Transaction ID / Payment Reference.'); }
  if(!name||!phone||!address){
    if(btn) btn.disabled=false;
    return alert('নাম, ফোন নম্বর এবং ডেলিভারি ঠিকানা দিন।');
@@ -60,13 +64,15 @@ async function placeOrder(e){
    email:u?(u.email||''):'',
    customerName:name, phone, address,
    orderType:$('cOrderType').value,
-   paymentMethod:$('cPayment').value,
-   paymentReference:$('cReference').value.trim(),
+   paymentMethod,
+   paymentReference,
    items:cart.map(x=>({...x})),
    subtotal:sub, deliveryCharge:del, total,
-   status:'pending',
-   paymentStatus:'unverified',
-   customerNotice:'আমরা আপনার অর্ডারটি পেয়েছি। অর্ডারটি যাচাই করে শিগগিরই আপনাকে জানানো হবে।',
+   status:'confirmed',
+   paymentStatus:paymentMethod==='Cash on Delivery'?'pending':'unverified',
+   invoiceStatus:settings.autoInvoice===false?'manual':'ready',
+   invoiceNumber:'RUV-'+Date.now(),
+   customerNotice:'Your order has been received and confirmed. Our team will contact you if any clarification is needed.',
    noticeAt:firebase.firestore.FieldValue.serverTimestamp(),
    createdAt:firebase.firestore.FieldValue.serverTimestamp()
  };
@@ -126,6 +132,10 @@ async function placeOrder(e){
  const sub=cartSubtotal(),del=deliveryCharge(sub),total=sub+del;
  const u=auth.currentUser;
  const name=$('cName').value.trim(), phone=$('cPhone').value.trim(), address=$('cAddress').value.trim();
+ const paymentMethod=$('cPayment').value;
+ const paymentReference=$('cReference').value.trim();
+ if(!paymentMethod){ if(btn) btn.disabled=false; return alert('Please select a payment method.'); }
+ if(paymentMethod!=='Cash on Delivery' && !paymentReference){ if(btn) btn.disabled=false; return alert('Please enter the Transaction ID / Payment Reference.'); }
  if(!name||!phone||!address){
    if(btn) btn.disabled=false;
    return alert('নাম, ফোন নম্বর এবং ডেলিভারি ঠিকানা দিন।');
@@ -135,13 +145,15 @@ async function placeOrder(e){
    email:u?(u.email||''):'',
    customerName:name, phone, address,
    orderType:$('cOrderType').value,
-   paymentMethod:$('cPayment').value,
-   paymentReference:$('cReference').value.trim(),
+   paymentMethod,
+   paymentReference,
    items:cart.map(x=>({...x})),
    subtotal:sub, deliveryCharge:del, total,
-   status:'pending',
-   paymentStatus:'unverified',
-   customerNotice:'আমরা আপনার অর্ডারটি পেয়েছি। অর্ডারটি যাচাই করে শিগগিরই আপনাকে জানানো হবে।',
+   status:'confirmed',
+   paymentStatus:paymentMethod==='Cash on Delivery'?'pending':'unverified',
+   invoiceStatus:settings.autoInvoice===false?'manual':'ready',
+   invoiceNumber:'RUV-'+Date.now(),
+   customerNotice:'Your order has been received and confirmed. Our team will contact you if any clarification is needed.',
    noticeAt:firebase.firestore.FieldValue.serverTimestamp(),
    createdAt:firebase.firestore.FieldValue.serverTimestamp()
  };
@@ -170,8 +182,8 @@ async function signup(){let name=$('sName').value.trim(),phone=$('sPhone').value
 async function login(e){e.preventDefault();try{await auth.signInWithEmailAndPassword($('aEmail').value.trim(),$('aPassword').value);renderAccount()}catch(e){alert(e.message)}}
 function logoutCustomer(){clearCustomerUnsubs();auth.signOut();closeModals()}
 async function updateProfile(){let name=$('pName').value.trim(),phone=$('pPhone').value.trim(),address=$('pAddress').value.trim();if(!name||!phone||!address)return alert('নাম, ফোন ও ঠিকানা পূরণ করুন।');await saveCustomerProfile({name,phone,address});try{await auth.currentUser.updateProfile({displayName:name})}catch(e){}alert('Profile updated');await refreshAccountData();accountSection('profile')}
-async function openMessage(){let u=auth.currentUser;if(!u)return alert('Message পাঠাতে আগে Account থেকে Login করুন।');try{let d=await db.collection('customers').doc(u.uid).get();if(d.exists){$('mName').value=d.data().name||'';$('mPhone').value=d.data().phone||''}}catch(e){let p=JSON.parse(localStorage.getItem('ruvoraProfile_'+u.uid)||'{}');$('mName').value=p.name||u.displayName||'';$('mPhone').value=p.phone||''}show('messageModal')}
-async function sendMessage(e){e.preventDefault();let u=auth.currentUser;if(!u)return alert('Message পাঠাতে আগে Account থেকে Login করুন।');let text=$('mText').value.trim();if(!text)return;try{await db.collection('messages').add({uid:u.uid,email:u.email||'',name:$('mName').value.trim(),phone:$('mPhone').value.trim(),message:text,status:'unread',reply:'',createdAt:firebase.firestore.FieldValue.serverTimestamp()});$('mText').value='';alert('Message sent. Reply এলে Account → Messages-এ দেখা যাবে।');closeModals()}catch(err){alert('Message পাঠানো যায়নি: '+err.message)}}
+async function openMessage(){let u=auth.currentUser;try{let d=await db.collection('customers').doc(u.uid).get();if(d.exists){$('mName').value=d.data().name||'';$('mPhone').value=d.data().phone||''}}catch(e){let p=JSON.parse(localStorage.getItem('ruvoraProfile_'+u.uid)||'{}');$('mName').value=p.name||u.displayName||'';$('mPhone').value=p.phone||''}show('messageModal')}
+async function sendMessage(e){e.preventDefault();let u=auth.currentUser;let text=$('mText').value.trim();if(!text)return;try{await db.collection('messages').add({uid:u?u.uid:null,email:u?(u.email||''):'',name:$('mName').value.trim(),phone:$('mPhone').value.trim(),message:text,status:'unread',reply:'',createdAt:firebase.firestore.FieldValue.serverTimestamp()});$('mText').value='';alert('Message sent. Reply এলে Account → Messages-এ দেখা যাবে।');closeModals()}catch(err){alert('Message পাঠানো যায়নি: '+err.message)}}
 
 
 function dateText(v){try{return v&&v.toDate?v.toDate().toLocaleString('en-BD'):''}catch(e){return ''}}
