@@ -84,11 +84,13 @@ button,input,select,textarea{font:inherit}button{cursor:pointer;border:0}.wrap{m
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script>
 const firebaseConfig={"apiKey":"AIzaSyAA3Q7WYPRHEZQaxHJ1rcz_OUOtUcRQ68k","authDomain":"ruvora-food.firebaseapp.com","projectId":"ruvora-food","storageBucket":"ruvora-food.firebasestorage.app","messagingSenderId":"111801740589","appId":"1:111801740589:web:c6b888e615ad141e2977a4","measurementId":"G-6QRCCDNCEM"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 const auth=firebase.auth();
+const storage=firebase.storage();
 
 const DEFAULT_SETTINGS={
   companyName:"RUVORA FOOD",announcement:"Pure. Natural. Trust. • Fresh spices for your family",
@@ -187,16 +189,28 @@ async function placeOrder(e){
   e.preventDefault();
   const f=new FormData(e.target), sub=cartSubtotal(), del=deliveryCharge(sub);
   const items=cart.map(i=>{const p=productById(i.id);return {productId:i.id,name:p?.name||"Product",weight:p?.weight||"",price:Number(p?.price||0),qty:i.qty}});
-  const order={customer:{name:f.get("name"),phone:f.get("phone"),address:f.get("address"),district:f.get("district"),area:f.get("area")},note:f.get("note")||"",payment:f.get("payment")||"Cash on Delivery",items,subtotal:sub,delivery:del,total:sub+del,status:"Pending",paymentStatus:"Unpaid",createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdAtClient:new Date().toISOString()};
+  const createdAtClient=new Date().toISOString();
+  const orderBase={customer:{name:f.get("name"),phone:f.get("phone"),address:f.get("address"),district:f.get("district"),area:f.get("area")},note:f.get("note")||"",payment:f.get("payment")||"Cash on Delivery",items,subtotal:sub,delivery:del,total:sub+del,status:"Pending",paymentStatus:"Unpaid",createdAtClient};
   try{
-    const ref=await db.collection("orders").add(order);
+    const ref=await db.collection("orders").add({...orderBase,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    const invoiceNumber="RV-"+createdAtClient.slice(0,10).replace(/-/g,"")+"-"+ref.id.slice(0,6).toUpperCase();
+    await db.collection("orders").doc(ref.id).set({invoiceNumber},{merge:true});
+    await db.collection("invoices").doc(ref.id).set({orderId:ref.id,invoiceNumber,customer:orderBase.customer,items,subtotal:sub,delivery:del,total:sub+del,status:"Pending",paymentStatus:"Unpaid",createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    await Promise.all(items.map(async item=>{
+      if(!item.productId)return;
+      const pRef=db.collection("products").doc(item.productId);
+      const pSnap=await pRef.get();
+      if(!pSnap.exists)return;
+      const current=Math.max(0,Number(pSnap.data().stock||0));
+      const next=Math.max(0,current-Number(item.qty||0));
+      await pRef.update({stock:next,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    }));
     cart=[];saveLocal();updateCartCount();closeCart();
-    openModal(`<div class="success"><div class="check">✓</div><h2>Order received</h2><p>Your order ID is <b>${ref.id.slice(0,10).toUpperCase()}</b></p><p style="color:#6d7c75">Keep this ID and your phone number to track the order.</p><button class="full" onclick="closeModal();openTrack()">Track Order</button></div>`);
+    openModal(`<div class="success"><div class="check">✓</div><h2>Order received</h2><p>Your order ID is <b>${ref.id.slice(0,10).toUpperCase()}</b></p><p>Invoice: <b>${invoiceNumber}</b></p><p style="color:#6d7c75">Keep the order ID and phone number to track the order.</p><button class="full" onclick="closeModal();openTrack()">Track Order</button></div>`);
   }catch(err){
     const localId="RV"+Date.now().toString(36).toUpperCase();
     const msg=`RUVORA FOOD ORDER ${localId}%0AName: ${f.get("name")}%0APhone: ${f.get("phone")}%0AAddress: ${f.get("address")}%0AItems: ${items.map(x=>x.name+" x"+x.qty).join(", ")}%0ATotal: ${money(sub+del)}`;
-    cart=[];saveLocal();updateCartCount();
-    openModal(`<div class="success"><div class="check">!</div><h2>Order prepared</h2><p>Online order server is not connected right now.</p><p>Send this order to WhatsApp to complete it.</p><a class="full" style="display:block;text-align:center;text-decoration:none" target="_blank" href="${whatsappUrl(msg)}">Send Order on WhatsApp</a></div>`);
+    openModal(`<div class="success"><div class="check">!</div><h2>Order could not be saved</h2><p>${safe(err.message||"Firebase error")}</p><p>You can still send the order to WhatsApp.</p><a class="full" style="display:block;text-align:center;text-decoration:none" target="_blank" href="${whatsappUrl(msg)}">Send Order on WhatsApp</a></div>`);
   }
 }
 function whatsappUrl(text){return "https://wa.me/"+String(settings.whatsapp||"").replace(/\D/g,"")+"?text="+encodeURIComponent(text)}
@@ -236,7 +250,7 @@ function watchProducts(){
     products=snap.docs.map(d=>({id:d.id,...d.data()}));renderCategories();renderProducts();
   },err=>{
     products=[...SEED];renderCategories();renderProducts();
-    const note=document.createElement("div");note.className="errorbox";note.style.gridColumn="1/-1";note.textContent="Showing the built-in catalogue. Firebase is not connected yet; connect Firebase to manage live products."; $("productArea").prepend(note);
+    const note=document.createElement("div");note.className="errorbox";note.style.gridColumn="1/-1";note.textContent="Showing the built-in catalogue. Firebase is not connected or Firestore rules are blocking access. Connect Firebase and publish the provided rules."; $("productArea").prepend(note);
   });
 }
 loadLocal();updateCartCount();applySettings();watchSettings();watchProducts();
